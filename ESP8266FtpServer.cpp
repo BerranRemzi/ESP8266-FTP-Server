@@ -32,6 +32,50 @@
 WiFiServer ftpServer(FTP_CTRL_PORT);
 WiFiServer dataServer(FTP_DATA_PORT_PASV);
 
+static String EpochToISO(time_t epochTime)
+{
+  // Define the constants for time conversion
+  const int daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+  // Calculate the number of seconds in a day
+  const int SECS_PER_DAY = 86400;
+  const int SECS_PER_HOUR = 3600;
+  const int SECS_PER_MINUTE = 60;
+
+  // Calculate the number of days since the epoch
+  int daysSinceEpoch = epochTime / SECS_PER_DAY;
+  int secsOfDay = epochTime % SECS_PER_DAY;
+
+  // Calculate the year, month, and day
+  int year = 1970;
+  while (daysSinceEpoch >= (year % 4 == 0 ? 366 : 365))
+  {
+    daysSinceEpoch -= (year % 4 == 0 ? 366 : 365);
+    year++;
+  }
+
+  int month = 0;
+  while (daysSinceEpoch >= daysInMonth[month] + (month == 1 && year % 4 == 0 ? 1 : 0))
+  {
+    daysSinceEpoch -= daysInMonth[month] + (month == 1 && year % 4 == 0 ? 1 : 0);
+    month++;
+  }
+
+  int day = daysSinceEpoch + 1;
+
+  // Calculate the hour, minute, and second
+  int hour = secsOfDay / SECS_PER_HOUR;
+  int minute = (secsOfDay % SECS_PER_HOUR) / SECS_PER_MINUTE;
+  int second = secsOfDay % SECS_PER_MINUTE;
+
+  // Format into YYYYMMDDHHMMSS
+  char buffer[15];
+  snprintf(buffer, sizeof(buffer), "%04d%02d%02d%02d%02d%02d",
+           year, month + 1, day, hour, minute, second);
+
+  return String(buffer);
+}
+
 void FtpServer::begin(String uname, String pword)
 {
   // Tells the ftp server to begin listening for incoming connection
@@ -477,7 +521,8 @@ boolean FtpServer::processCommand()
           String type = dir.isDirectory() ? "dir" : "file";
           String fs = type == "dir" ? "0" : String(dir.fileSize());
 
-          data.println("Type=" + type + ";Size=" + fs + ";modify=20000101160656; " + fn);
+          String modify = type == "dir" ? EpochToISO(dir.fileCreationTime()) : EpochToISO(dir.fileTime());
+          data.println("Type=" + type + ";Size=" + fs + ";modify=" + modify + "; " + fn);
           nm++;
         }
         client.println("226-options: -a -l");
