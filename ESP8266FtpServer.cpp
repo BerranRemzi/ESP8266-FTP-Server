@@ -70,7 +70,7 @@ static String EpochToISO(time_t epochTime)
   int second = secsOfDay % SECS_PER_MINUTE;
 
   // Format into YYYYMMDDHHMMSS
-  char buffer[15];
+  char buffer[64];
   snprintf(buffer, sizeof(buffer), "%04d%02d%02d%02d%02d%02d",
            year, month + 1, day, hour, minute, second);
 
