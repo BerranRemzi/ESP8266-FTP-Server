@@ -4,6 +4,7 @@
 
 volatile uint32_t SDControl::_spiBlockoutTime = 0;
 bool SDControl::_weTookBus = false;
+uint8_t SDControl::_csPin = NOT_A_PIN;
 
 IRAM_ATTR void onBusActivitylInterrupt()
 {

@@ -1,5 +1,5 @@
-#ifndef SD_H_
-#define SD_H_
+#ifndef SD_H
+#define SD_H
 
 #define MISO_PIN 12
 #define MOSI_PIN 13
