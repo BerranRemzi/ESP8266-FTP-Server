@@ -34,6 +34,8 @@
 // #include "Streaming.h"
 #include <FS.h>
 #include <WiFiClient.h>
+#include <LittleFS.h>
+#include <SDFS.h>
 
 #define FTP_SERVER_VERSION "FTP-2017-10-18"
 
@@ -57,6 +59,18 @@ typedef enum
 class FtpServer
 {
 public:
+  FtpServer(uint8_t pin = NOT_A_PIN)
+  {
+    sdCSpin = pin;
+    if (NOT_A_PIN == sdCSpin)
+    {
+      VirtualFS = &LittleFS;
+    }
+    else
+    {
+      VirtualFS = &SDFS;
+    }
+  }
   void begin(String uname, String pword);
   void handleFTP();
 
@@ -78,7 +92,7 @@ private:
                       uint8_t *phour, uint8_t *pminute, uint8_t *second);
   char *makeDateTimeStr(char *tstr, uint16_t date, uint16_t time);
   int8_t readChar();
-
+  FS *VirtualFS = nullptr;
   IPAddress dataIp; // IP address of client for data
   WiFiClient client;
   WiFiClient data;

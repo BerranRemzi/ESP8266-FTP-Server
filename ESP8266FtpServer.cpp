@@ -23,7 +23,7 @@
 #include <ESP8266WiFi.h>
 #elif defined ESP32
 #include <WiFi.h>
-#include "SDFS.h"
+#include "VirtualFS->h"
 #endif
 #include <WiFiClient.h>
 #include <FS.h>
@@ -115,7 +115,7 @@ bool FtpServer::sdMode(SDMode_t newMode)
   switch (newMode)
   {
   case SD_IDLE:
-    SDFS.end();
+    VirtualFS->end();
     pinMode(13, INPUT); // GPIO13 (MOSI - D7)
     pinMode(12, INPUT); // GPIO12 (MISO - D6)
     pinMode(14, INPUT); // GPIO14 (SCLK - D5)
@@ -128,7 +128,7 @@ bool FtpServer::sdMode(SDMode_t newMode)
     {
       pinMode(sdCSpin, OUTPUT);
 
-      if (SDFS.begin())
+      if (VirtualFS->begin())
       {
         returnValue = true;
         Serial.println("SDFS opened!");
@@ -207,7 +207,7 @@ void FtpServer::handleFTP()
       if (sdControl.takeBusControl())
       {
         // Init SD card
-        SDFS.begin();
+        VirtualFS->begin();
         clientConnected();
         millisEndConnection = millis() + 10 * 1000; // wait client id during 10 s.
         cmdStatus = WAIT_FOR_USER_IDENTITY;
@@ -264,8 +264,8 @@ void FtpServer::handleFTP()
     Serial.println("client disconnected");
 #endif
     // Release SD card
+    VirtualFS->end();
     sdControl.releaseBusControl();
-    SDFS.end();
   }
 
   if (transferStatus == RETRIVE_DATA) // Retrieve data
@@ -536,13 +536,13 @@ bool FtpServer::command_DELE()
   }
   else if (makePath(path))
   {
-    if (!SDFS.exists(path))
+    if (!VirtualFS->exists(path))
     {
       client.println("550 File " + String(parameters) + " not found");
     }
     else
     {
-      if (SDFS.remove(path))
+      if (VirtualFS->remove(path))
         client.println("250 Deleted " + String(parameters));
       else
         client.println("450 Can't delete " + String(parameters));
@@ -564,8 +564,8 @@ bool FtpServer::command_LIST()
     client.println("150 Accepted data connection");
     uint16_t nm = 0;
 #ifdef ESP8266
-    Dir dir = SDFS.openDir(cwdName);
-    if (!SDFS.exists(cwdName))
+    Dir dir = VirtualFS->openDir(cwdName);
+    if (!VirtualFS->exists(cwdName))
     {
       client.println("550 Can't open directory " + String(cwdName));
     }
@@ -585,7 +585,7 @@ bool FtpServer::command_LIST()
       client.println("226 " + String(nm) + " matches total");
     }
 #elif defined ESP32
-    File root = SDFS.open(cwdName);
+    File root = VirtualFS->open(cwdName);
     if (!root)
     {
       client.println("550 Can't open directory " + String(cwdName));
@@ -643,10 +643,10 @@ bool FtpServer::command_MLSD()
     client.println("150 Accepted data connection");
     uint16_t nm = 0;
 #ifdef ESP8266
-    Dir dir = SDFS.openDir(cwdName);
+    Dir dir = VirtualFS->openDir(cwdName);
     Serial.println(cwdName);
     char dtStr[15];
-    if (!SDFS.exists(cwdName))
+    if (!VirtualFS->exists(cwdName))
     {
       client.println("550 Can't open directory " + String(parameters));
     }
@@ -666,7 +666,7 @@ bool FtpServer::command_MLSD()
       client.println("226 " + String(nm) + " matches total");
     }
 #elif defined ESP32
-    File root = SDFS.open(cwdName);
+    File root = VirtualFS->open(cwdName);
     // if(!root){
     // 		client.println( "550 Can't open directory " + String(cwdName) );
     // 		// return;
@@ -718,8 +718,8 @@ bool FtpServer::command_NLST()
     client.println("150 Accepted data connection");
     uint16_t nm = 0;
 #ifdef ESP8266
-    Dir dir = SDFS.openDir(cwdName);
-    if (!SDFS.exists(cwdName))
+    Dir dir = VirtualFS->openDir(cwdName);
+    if (!VirtualFS->exists(cwdName))
       client.println("550 Can't open directory " + String(parameters));
     else
     {
@@ -731,7 +731,7 @@ bool FtpServer::command_NLST()
       client.println("226 " + String(nm) + " matches total");
     }
 #elif defined ESP32
-    File root = SDFS.open(cwdName);
+    File root = VirtualFS->open(cwdName);
     if (!root)
     {
       client.println("550 Can't open directory " + String(cwdName));
@@ -772,7 +772,7 @@ bool FtpServer::command_RETR()
     client.println("501 No file name");
   else if (makePath(path))
   {
-    file = SDFS.open(path, "r");
+    file = VirtualFS->open(path, "r");
     if (!file)
       client.println("550 File " + String(parameters) + " not found");
     else if (!file)
@@ -803,7 +803,7 @@ bool FtpServer::command_STOR()
     client.println("501 No file name");
   else if (makePath(path))
   {
-    file = SDFS.open(path, "w");
+    file = VirtualFS->open(path, "w");
     if (!file)
       client.println("451 Can't open/create " + String(parameters));
     else if (!dataConnect())
@@ -852,7 +852,7 @@ bool FtpServer::command_RNFR()
   }
   else if (makePath(buf))
   {
-    if (!SDFS.exists(buf))
+    if (!VirtualFS->exists(buf))
     {
       client.println("550 File " + String(parameters) + " not found");
     }
@@ -880,14 +880,14 @@ bool FtpServer::command_RNTO()
     client.println("501 No file name");
   else if (makePath(path))
   {
-    if (SDFS.exists(path))
+    if (VirtualFS->exists(path))
       client.println("553 " + String(parameters) + " already exists");
     else
     {
 #ifdef FTP_DEBUG
       Serial.println("Renaming " + String(buf) + " to " + String(path));
 #endif
-      if (SDFS.rename(buf, path))
+      if (VirtualFS->rename(buf, path))
         client.println("250 File successfully renamed or moved");
       else
         client.println("451 Rename/move failure");
@@ -934,7 +934,7 @@ bool FtpServer::command_SIZE()
   }
   else if (makePath(path))
   {
-    file = SDFS.open(path, "r");
+    file = VirtualFS->open(path, "r");
     if (!file)
     {
       client.println("450 Can't open " + String(parameters));
