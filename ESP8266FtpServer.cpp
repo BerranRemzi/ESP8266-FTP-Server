@@ -30,49 +30,23 @@
 #include <SDFS.h>
 #include <sdControl.h>
 
-WiFiServer ftpServer(FTP_CTRL_PORT);
+WiFiServer controlServer(FTP_CTRL_PORT);
 WiFiServer dataServer(FTP_DATA_PORT_PASV);
 
 static String EpochToISO(time_t epochTime)
 {
-  // Define the constants for time conversion
-  const int daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-
-  // Calculate the number of seconds in a day
-  const int SECS_PER_DAY = 86400;
-  const int SECS_PER_HOUR = 3600;
-  const int SECS_PER_MINUTE = 60;
-
-  // Calculate the number of days since the epoch
-  int daysSinceEpoch = epochTime / SECS_PER_DAY;
-  int secsOfDay = epochTime % SECS_PER_DAY;
-
-  // Calculate the year, month, and day
-  int year = 1970;
-  while (daysSinceEpoch >= (year % 4 == 0 ? 366 : 365))
-  {
-    daysSinceEpoch -= (year % 4 == 0 ? 366 : 365);
-    year++;
-  }
-
-  int month = 0;
-  while (daysSinceEpoch >= daysInMonth[month] + (month == 1 && year % 4 == 0 ? 1 : 0))
-  {
-    daysSinceEpoch -= daysInMonth[month] + (month == 1 && year % 4 == 0 ? 1 : 0);
-    month++;
-  }
-
-  int day = daysSinceEpoch + 1;
-
-  // Calculate the hour, minute, and second
-  int hour = secsOfDay / SECS_PER_HOUR;
-  int minute = (secsOfDay % SECS_PER_HOUR) / SECS_PER_MINUTE;
-  int second = secsOfDay % SECS_PER_MINUTE;
+  tm localTime;                        // the structure tm holds time information in a more convenient way
+  localtime_r(&epochTime, &localTime); // update the structure tm with the current time
 
   // Format into YYYYMMDDHHMMSS
-  char buffer[64];
+  char buffer[35];
   snprintf(buffer, sizeof(buffer), "%04d%02d%02d%02d%02d%02d",
-           year, month + 1, day, hour, minute, second);
+           (1900 + localTime.tm_year),
+           localTime.tm_mon,
+           (1 + localTime.tm_mday),
+           localTime.tm_hour,
+           localTime.tm_min,
+           localTime.tm_min);
 
   return String(buffer);
 }
@@ -83,7 +57,7 @@ void FtpServer::begin(String uname, String pword)
   _FTP_USER = uname;
   _FTP_PASS = pword;
 
-  ftpServer.begin();
+  controlServer.begin();
   delay(10);
   dataServer.begin();
   delay(10);
@@ -91,7 +65,9 @@ void FtpServer::begin(String uname, String pword)
   millisDelay = 0;
   cmdStatus = 0;
   iniVariables();
-  sdControl.setup(sdCSpin);
+  sdControl.setup(_sdCSPin);
+
+  configTime(MY_TZ, MY_NTP_SERVER);
 }
 
 void FtpServer::iniVariables()
@@ -109,41 +85,6 @@ void FtpServer::iniVariables()
   transferStatus = 0;
 }
 
-bool FtpServer::sdMode(SDMode_t newMode)
-{
-  bool returnValue = false;
-  switch (newMode)
-  {
-  case SD_IDLE:
-    VirtualFS->end();
-    pinMode(13, INPUT); // GPIO13 (MOSI - D7)
-    pinMode(12, INPUT); // GPIO12 (MISO - D6)
-    pinMode(14, INPUT); // GPIO14 (SCLK - D5)
-    pinMode(sdCSpin, INPUT);
-    Serial.println("SDFS closed!");
-    returnValue = true;
-    break;
-  case SD_BUSY:
-    if (digitalRead(sdCSpin) == HIGH)
-    {
-      pinMode(sdCSpin, OUTPUT);
-
-      if (VirtualFS->begin())
-      {
-        returnValue = true;
-        Serial.println("SDFS opened!");
-      }
-      else
-      {
-        Serial.println("SDFS can't open!");
-      }
-    }
-    break;
-  default:
-    break;
-  }
-  return returnValue;
-}
 void FtpServer::handleFTP()
 {
   typedef enum
@@ -177,10 +118,10 @@ void FtpServer::handleFTP()
     return;
   }
 
-  if (ftpServer.hasClient())
+  if (controlServer.hasClient())
   {
     client.stop();
-    client = ftpServer.accept();
+    client = controlServer.accept();
   }
 
   if (cmdStatus == DISCONNECTED)
@@ -365,13 +306,11 @@ bool FtpServer::command_CWD()
   if (strcmp(parameters, ".") == 0)
   { // 'CWD .' is the same as PWD command
     client.println("257 \"" + String(cwdName) + "\" is your current directory");
-    Serial.println("257 \"" + String(cwdName) + "\" is your current directory");
   }
   else
   {
     strcpy(cwdName, parameters);
     client.println("250 Ok. Current directory is " + String(cwdName));
-    Serial.println("250 Ok. Current directory is " + String(cwdName));
   }
   return true;
 }
@@ -1284,19 +1223,7 @@ uint8_t FtpServer::getDateTime(uint16_t *pyear, uint8_t *pmonth, uint8_t *pday,
   return 15;
 }
 
-// Create string YYYYMMDDHHMMSS from date and time
-//
-// parameters:
-//    date, time
-//    tstr: where to store the string. Must be at least 15 characters long
-//
-// return:
-//    pointer to tstr
-
-char *FtpServer::makeDateTimeStr(char *tstr, uint16_t date, uint16_t time)
+uint32_t sntp_startup_delay_MS_rfc_not_less_than_60000()
 {
-  sprintf(tstr, "%04u%02u%02u%02u%02u%02u",
-          ((date & 0xFE00) >> 9) + 1980, (date & 0x01E0) >> 5, date & 0x001F,
-          (time & 0xF800) >> 11, (time & 0x07E0) >> 5, (time & 0x001F) << 1);
-  return tstr;
+  return 5000u;
 }

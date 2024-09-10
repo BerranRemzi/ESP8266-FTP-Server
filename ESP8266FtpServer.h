@@ -36,6 +36,11 @@
 #include <WiFiClient.h>
 #include <LittleFS.h>
 #include <SDFS.h>
+#include <time.h>
+
+/* Configuration of NTP */
+#define MY_NTP_SERVER "bg.pool.ntp.org"
+#define MY_TZ "UTC0"
 
 #define FTP_SERVER_VERSION "FTP-2017-10-18"
 
@@ -59,10 +64,10 @@ typedef enum
 class FtpServer
 {
 public:
-  FtpServer(uint8_t pin = NOT_A_PIN)
+  FtpServer(int16_t pin = NOT_A_PIN)
   {
-    sdCSpin = pin;
-    if (NOT_A_PIN == sdCSpin)
+    _sdCSPin = pin;
+    if (NOT_A_PIN == _sdCSPin)
     {
       VirtualFS = &LittleFS;
     }
@@ -90,7 +95,6 @@ private:
   boolean makePath(char *fullName, char *param);
   uint8_t getDateTime(uint16_t *pyear, uint8_t *pmonth, uint8_t *pday,
                       uint8_t *phour, uint8_t *pminute, uint8_t *second);
-  char *makeDateTimeStr(char *tstr, uint16_t date, uint16_t time);
   int8_t readChar();
   FS *VirtualFS = nullptr;
   IPAddress dataIp; // IP address of client for data
@@ -118,8 +122,7 @@ private:
   String _FTP_USER;
   String _FTP_PASS;
 
-  int sdCSpin = 5;
-  bool sdMode(SDMode_t mode);
+  int16_t _sdCSPin = 5;
 
   bool command_CDUP();
   bool command_CWD();
