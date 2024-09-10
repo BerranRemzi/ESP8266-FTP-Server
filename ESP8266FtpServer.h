@@ -54,6 +54,8 @@
 // #define FTP_BUF_SIZE 1024 //512   // size of file buffer for read/write
 #define FTP_BUF_SIZE 2 * 1460 // 512   // size of file buffer for read/write
 
+#define FTP_USER_COUNT 3u
+
 typedef enum
 {
   SD_IDLE,
@@ -61,22 +63,22 @@ typedef enum
   SD_MODE_COUNТ
 } SDMode_t;
 
+typedef struct
+{
+  String name;
+  String password;
+  int16_t pin;
+} User_t;
+
 class FtpServer
 {
 public:
-  FtpServer(int16_t pin = NOT_A_PIN)
+  FtpServer()
   {
-    _sdCSPin = pin;
-    if (NOT_A_PIN == _sdCSPin)
-    {
-      VirtualFS = &LittleFS;
-    }
-    else
-    {
-      VirtualFS = &SDFS;
-    }
+    _userIndex = 0u;
   }
-  void begin(String uname, String pword);
+  void addUser(String uname, String pword, int16_t pin = NOT_A_PIN);
+  void begin();
   void handleFTP();
 
 private:
@@ -119,9 +121,10 @@ private:
       millisEndConnection, //
       millisBeginTrans,    // store time of beginning of a transaction
       bytesTransfered;     //
-  String _FTP_USER;
-  String _FTP_PASS;
 
+  User_t _user[FTP_USER_COUNT];
+  uint8_t _userIndex = 0u;
+  int8_t _selectedUser = -1;
   int16_t _sdCSPin = 5;
 
   bool command_CDUP();

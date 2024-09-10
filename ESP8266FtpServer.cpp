@@ -51,21 +51,33 @@ static String EpochToISO(time_t epochTime)
   return String(buffer);
 }
 
-void FtpServer::begin(String uname, String pword)
+void FtpServer::addUser(String uname, String pword, int16_t pin)
+{
+  _user[_userIndex].name = uname;
+  _user[_userIndex].password = pword;
+  _user[_userIndex].pin = pin;
+
+  if (NOT_A_PIN != _user[_userIndex].pin)
+  {
+    sdControl.setup(_user[_userIndex].pin);
+  }
+
+  _userIndex++;
+}
+
+void FtpServer::begin()
 {
   // Tells the ftp server to begin listening for incoming connection
-  _FTP_USER = uname;
-  _FTP_PASS = pword;
-
   controlServer.begin();
   delay(10);
+
   dataServer.begin();
   delay(10);
+
   millisTimeOut = (uint32_t)FTP_TIME_OUT * 60 * 1000;
   millisDelay = 0;
   cmdStatus = 0;
   iniVariables();
-  sdControl.setup(_sdCSPin);
 
   configTime(MY_TZ, MY_NTP_SERVER);
 }
@@ -145,19 +157,9 @@ void FtpServer::handleFTP()
   {
     if (client.connected()) // A client connected
     {
-      if (sdControl.takeBusControl())
-      {
-        // Init SD card
-        VirtualFS->begin();
-        clientConnected();
-        millisEndConnection = millis() + 10 * 1000; // wait client id during 10 s.
-        cmdStatus = WAIT_FOR_USER_IDENTITY;
-      }
-      else
-      {
-        disconnectClient();
-        cmdStatus = WAIT_FOR_CONNECTION;
-      }
+      clientConnected();
+      millisEndConnection = millis() + 10 * 1000; // wait client id during 10 s.
+      cmdStatus = WAIT_FOR_USER_IDENTITY;
     }
   }
   else if (readChar() > 0) // got response
@@ -174,10 +176,25 @@ void FtpServer::handleFTP()
       }
     }
     else if (cmdStatus == WAIT_FOR_USER_PASSWORD)
-    { // Ftp server waiting for user registration
+    {
+      // Ftp server waiting for user registration
       if (userPassword())
       {
-
+        if (NOT_A_PIN != _user[_selectedUser].pin)
+        {
+          if (sdControl.takeBusControl())
+          {
+            // Init SD card
+            VirtualFS = &SDFS;
+            VirtualFS->begin();
+          }
+        }
+        else
+        {
+          // Init SD card
+          VirtualFS = &LittleFS;
+          VirtualFS->begin();
+        }
         cmdStatus = WAIT_FOR_USER_COMMAND;
         millisEndConnection = millis() + millisTimeOut;
       }
@@ -251,15 +268,24 @@ void FtpServer::disconnectClient()
 boolean FtpServer::userIdentity()
 {
   if (strcmp(command, "USER"))
-    client.println("500 Syntax error");
-  if (strcmp(parameters, _FTP_USER.c_str()))
-    client.println("530 user not found");
-  else
   {
-    client.println("331 OK. Password required");
-    strcpy(cwdName, "/");
-    return true;
+    client.println("500 Syntax error");
   }
+
+  _selectedUser = -1;
+  for (uint8_t i = 0u; i < _userIndex; i++)
+  {
+    if (0 == strcmp(parameters, _user[i].name.c_str()))
+    {
+      _selectedUser = i;
+      client.println("331 OK. Password required");
+      strcpy(cwdName, "/");
+      return true;
+    }
+  }
+
+  client.println("530 user not found");
+
   millisDelay = millis() + 100; // delay of 100 ms
   return false;
 }
@@ -267,9 +293,13 @@ boolean FtpServer::userIdentity()
 boolean FtpServer::userPassword()
 {
   if (strcmp(command, "PASS"))
+  {
     client.println("500 Syntax error");
-  else if (strcmp(parameters, _FTP_PASS.c_str()))
+  }
+  else if (strcmp(parameters, _user[_selectedUser].password.c_str()))
+  {
     client.println("530 ");
+  }
   else
   {
 #ifdef FTP_DEBUG
